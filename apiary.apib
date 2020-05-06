@@ -7,33 +7,8 @@ Polls is a simple API allowing consumers to view polls and vote in them.
 
 ## Questions Collection [/questions]
 
-### List All Questions [GET]
 
-+ Response 200 (application/json)
-
-        [
-            {
-                "question": "Favourite programming language?",
-                "published_at": "2015-08-05T08:40:51.620Z",
-                "choices": [
-                    {
-                        "choice": "Swift",
-                        "votes": 2048
-                    }, {
-                        "choice": "Python",
-                        "votes": 1024
-                    }, {
-                        "choice": "Objective-C",
-                        "votes": 512
-                    }, {
-                        "choice": "Ruby",
-                        "votes": 256
-                    }
-                ]
-            }
-        ]
-
-### Create a New Question [POST]
+### Create a New Item [POST]
 
 You may create your own question using this action. It takes a JSON
 object containing a question and a collection of answers in the
@@ -42,13 +17,26 @@ form of choices.
 + Request (application/json)
 
         {
-            "question": "Favourite programming language?",
-            "choices": [
-                "Swift",
-                "Python",
-                "Objective-C",
-                "Ruby"
-            ]
+           "transferTimeStamp": "29041988",
+           "pageNumber": 1,
+          "totalNumberOfPages": 30,
+          "priceChangeDate": "29041988",
+           "prices": [{
+            "item": 127683256,
+            "stores": [1,2,3,4,5],
+            "regularPrice": 1.45,
+            "promoPrice": 1.23,
+            "startDate": "20200427",
+            "endDate": "20200527"},
+            {
+            "item": 127683256,
+            "stores": [6,7,8,9,10],
+            "regularPrice": 1.45,
+            "promoPrice": 1.23,
+            "startDate": "20200427",
+            "endDate": "20200527"
+            }
+                    ]}
         }
 
 + Response 201 (application/json)
