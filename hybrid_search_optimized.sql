@@ -324,6 +324,8 @@ BEGIN
     -- Step 5: Execute productive search
     DBMS_OUTPUT.PUT_LINE('');
     DBMS_OUTPUT.PUT_LINE('=== SEARCH RESULTS (Page ' || v_page_number || ') ===');
+    DBMS_OUTPUT.PUT_LINE(RPAD('ITEM NUMBER', 15) || ' | ' || RPAD('DESCRIPTION', 50) || ' | ' || LPAD('QUANTITY', 10));
+    DBMS_OUTPUT.PUT_LINE(RPAD('-', 15, '-') || ' | ' || RPAD('-', 50, '-') || ' | ' || RPAD('-', 10, '-'));
     
     BEGIN
         OPEN c_productive_search(
@@ -337,29 +339,12 @@ BEGIN
 
             v_count := v_count + 1;
             
-            -- Enhanced result display
-            DBMS_OUTPUT.PUT_LINE('');
-            DBMS_OUTPUT.PUT_LINE(v_count || '. [' || rec.recommendation_type || '] ' || rec.itemno);
-            DBMS_OUTPUT.PUT_LINE('   DESC: ' || SUBSTR(rec."DESC", 1, 60) || 
-                CASE WHEN LENGTH(rec."DESC") > 60 THEN '...' ELSE '' END);
-            
-            -- Score breakdown
-            DBMS_OUTPUT.PUT_LINE('   TOTAL: ' || TO_CHAR(rec.total_score, '999.9') ||
-                ' | SIM: ' || TO_CHAR(rec.similarity_score, '99.9') ||
-                ' | KEY: ' || TO_CHAR(rec.keyword_score, '99') ||
-                ' | HIST: ' || TO_CHAR(rec.history_score, '99.9') ||
-                ' | CAT: ' || TO_CHAR(rec.category_score, '99'));
-            
-            -- Business intelligence
-            IF rec.cust_purchase_freq > 0 THEN
-                DBMS_OUTPUT.PUT_LINE('   CUSTOMER: Purchased ' || rec.cust_purchase_freq || 
-                    ' times | Last: ' || TO_CHAR(rec.last_purchase, 'YYYY-MM-DD') ||
-                    ' | Spent: $' || TO_CHAR(rec.cust_total_spent, '999.99'));
-            END IF;
-            
-            DBMS_OUTPUT.PUT_LINE('   STOCK: ' || rec.stock_qty || 
-                CASE WHEN rec.price > 0 THEN ' | PRICE: $' || TO_CHAR(rec.price, '999.99') ELSE '' END ||
-                CASE WHEN rec.category IS NOT NULL THEN ' | CAT: ' || rec.category ELSE '' END);
+            -- Simple result display: Item Number, Description, Quantity
+            DBMS_OUTPUT.PUT_LINE(
+                RPAD(rec.itemno, 15) || ' | ' ||
+                RPAD(SUBSTR(rec."DESC", 1, 50), 50) || ' | ' ||
+                LPAD('QTY: ' || rec.stock_qty, 10)
+            );
             
         END LOOP;
         CLOSE c_productive_search;
