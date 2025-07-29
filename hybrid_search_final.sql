@@ -29,9 +29,25 @@ BEGIN
 
     -- Setup
     v_offset := (v_page_number - 1) * v_top_n;
+    
+    -- Smart spell correction for common typos
+    v_search_term := CASE 
+        WHEN UPPER(v_search_term) LIKE '%ICE CUE%' THEN REPLACE(UPPER(v_search_term), 'ICE CUE', 'ICE CUBE')
+        WHEN UPPER(v_search_term) LIKE '%ICES%' THEN REPLACE(UPPER(v_search_term), 'ICES', 'ICE')
+        WHEN UPPER(v_search_term) LIKE '%CUEB%' THEN REPLACE(UPPER(v_search_term), 'CUEB', 'CUBE')
+        WHEN UPPER(v_search_term) LIKE '%CUVE%' THEN REPLACE(UPPER(v_search_term), 'CUVE', 'CUBE')
+        WHEN UPPER(v_search_term) LIKE '%CUDE%' THEN REPLACE(UPPER(v_search_term), 'CUDE', 'CUBE')
+        WHEN UPPER(v_search_term) LIKE '%REFRIGERAT%' THEN REPLACE(UPPER(v_search_term), 'REFRIGERAT', 'REFRIGERATOR')
+        WHEN UPPER(v_search_term) LIKE '%FREEZ%' THEN REPLACE(UPPER(v_search_term), 'FREEZ', 'FREEZER')
+        ELSE v_search_term
+    END;
 
     DBMS_OUTPUT.PUT_LINE('=== HYBRID SEARCH ===');
-    DBMS_OUTPUT.PUT_LINE('Search Term: "' || v_search_term || '"');
+    IF v_search_term != TRIM(v_search_term) THEN
+        DBMS_OUTPUT.PUT_LINE('Original Search: "' || TRIM(v_search_term) || '" → Corrected to: "' || v_search_term || '"');
+    ELSE
+        DBMS_OUTPUT.PUT_LINE('Search Term: "' || v_search_term || '"');
+    END IF;
     DBMS_OUTPUT.PUT_LINE('Customer: ' || v_customer_id);
     DBMS_OUTPUT.PUT_LINE('Days Lookback: ' || v_days_lookback);
     DBMS_OUTPUT.PUT_LINE('Results Per Page: ' || v_top_n);
@@ -101,7 +117,7 @@ BEGIN
                     ai."DESC",
                     ai.SYNONYMS,
                     
-                    -- Step 1: Precise text matching (DESC and SYNONYMS) - focused on exact relevance
+                    -- Step 1: Smart text matching with typo tolerance
                     CASE
                         -- Exact matches (highest priority)
                         WHEN UPPER(ai."DESC") = UPPER(v_search_term) THEN 100                    
@@ -118,6 +134,21 @@ BEGIN
                         -- Word boundary matches (precise matching)
                         WHEN REGEXP_LIKE(UPPER(ai."DESC"), '\b' || UPPER(v_search_term) || '\b') THEN 70     
                         WHEN ai.SYNONYMS IS NOT NULL AND REGEXP_LIKE(UPPER(ai.SYNONYMS), '\b' || UPPER(v_search_term) || '\b') THEN 70
+                        
+                        -- Smart typo handling for common mistakes
+                        WHEN UPPER(v_search_term) LIKE '%ICE CUE%' AND UPPER(ai."DESC") LIKE '%ICE CUBE%' THEN 75
+                        WHEN UPPER(v_search_term) LIKE '%CUEB%' AND UPPER(ai."DESC") LIKE '%CUBE%' THEN 65
+                        WHEN UPPER(v_search_term) LIKE '%CUVE%' AND UPPER(ai."DESC") LIKE '%CUBE%' THEN 65
+                        WHEN UPPER(v_search_term) LIKE '%CUDE%' AND UPPER(ai."DESC") LIKE '%CUBE%' THEN 65
+                        WHEN UPPER(v_search_term) LIKE '%FREEZ%' AND UPPER(ai."DESC") LIKE '%FREEZE%' THEN 65
+                        
+                        -- High similarity matching for close typos (using Oracle's built-in)
+                        WHEN UTL_MATCH.JARO_WINKLER_SIMILARITY(UPPER(ai."DESC"), UPPER(v_search_term)) >= 0.85 THEN 60
+                        WHEN ai.SYNONYMS IS NOT NULL AND UTL_MATCH.JARO_WINKLER_SIMILARITY(UPPER(ai.SYNONYMS), UPPER(v_search_term)) >= 0.85 THEN 60
+                        
+                        -- SOUNDEX matching for phonetically similar words
+                        WHEN SOUNDEX(UPPER(ai."DESC")) = SOUNDEX(UPPER(v_search_term)) THEN 50
+                        WHEN ai.SYNONYMS IS NOT NULL AND SOUNDEX(UPPER(ai.SYNONYMS)) = SOUNDEX(UPPER(v_search_term)) THEN 50
                         
                         ELSE 0
                     END AS text_match_score,
@@ -177,12 +208,24 @@ BEGIN
                 
                 WHERE ai."DESC" IS NOT NULL
                 AND LENGTH(TRIM(ai."DESC")) > 0
-                -- Focused filter: Exact matches prioritized
+                -- Smart filter: Exact matches + typo tolerance
                 AND (
                     -- Primary: Direct text matches in description
                     (UPPER(ai."DESC") LIKE '%' || UPPER(v_search_term) || '%') OR
                     -- Primary: Direct text matches in synonyms
                     (ai.SYNONYMS IS NOT NULL AND UPPER(ai.SYNONYMS) LIKE '%' || UPPER(v_search_term) || '%') OR
+                    -- Typo-tolerant matching for common mistakes
+                    (UPPER(v_search_term) LIKE '%ICE CUE%' AND UPPER(ai."DESC") LIKE '%ICE CUBE%') OR
+                    (UPPER(v_search_term) LIKE '%CUEB%' AND UPPER(ai."DESC") LIKE '%CUBE%') OR
+                    (UPPER(v_search_term) LIKE '%CUVE%' AND UPPER(ai."DESC") LIKE '%CUBE%') OR
+                    (UPPER(v_search_term) LIKE '%CUDE%' AND UPPER(ai."DESC") LIKE '%CUBE%') OR
+                    (UPPER(v_search_term) LIKE '%FREEZ%' AND UPPER(ai."DESC") LIKE '%FREEZE%') OR
+                    -- High similarity for close typos
+                    (UTL_MATCH.JARO_WINKLER_SIMILARITY(UPPER(ai."DESC"), UPPER(v_search_term)) >= 0.85) OR
+                    (ai.SYNONYMS IS NOT NULL AND UTL_MATCH.JARO_WINKLER_SIMILARITY(UPPER(ai.SYNONYMS), UPPER(v_search_term)) >= 0.85) OR
+                    -- SOUNDEX for phonetic similarity
+                    (SOUNDEX(UPPER(ai."DESC")) = SOUNDEX(UPPER(v_search_term))) OR
+                    (ai.SYNONYMS IS NOT NULL AND SOUNDEX(UPPER(ai.SYNONYMS)) = SOUNDEX(UPPER(v_search_term))) OR
                     -- Secondary: Vector similarity for semantic matches (if vector exists)
                     (ai.vector_desc IS NOT NULL AND (1 - vector_distance(ai.vector_desc, v_query_vector, COSINE)) >= 0.4) OR
                     -- Tertiary: Customer purchase history items
