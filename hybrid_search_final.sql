@@ -101,34 +101,23 @@ BEGIN
                     ai."DESC",
                     ai.SYNONYMS,
                     
-                    -- Step 1: Enhanced text matching (DESC and SYNONYMS) with comprehensive scoring
+                    -- Step 1: Precise text matching (DESC and SYNONYMS) - focused on exact relevance
                     CASE
                         -- Exact matches (highest priority)
                         WHEN UPPER(ai."DESC") = UPPER(v_search_term) THEN 100                    
                         WHEN ai.SYNONYMS IS NOT NULL AND UPPER(ai.SYNONYMS) = UPPER(v_search_term) THEN 100  
                         
-                        -- Starts with matches
+                        -- Starts with search term (very relevant)
                         WHEN UPPER(ai."DESC") LIKE UPPER(v_search_term) || '%' THEN 90           
                         WHEN ai.SYNONYMS IS NOT NULL AND UPPER(ai.SYNONYMS) LIKE UPPER(v_search_term) || '%' THEN 90
                         
-                        -- Contains full search term
+                        -- Contains complete search term (relevant)
                         WHEN UPPER(ai."DESC") LIKE '%' || UPPER(v_search_term) || '%' THEN 80    
                         WHEN ai.SYNONYMS IS NOT NULL AND UPPER(ai.SYNONYMS) LIKE '%' || UPPER(v_search_term) || '%' THEN 80
                         
-                        -- Word boundary matches
-                        WHEN REGEXP_LIKE(UPPER(ai."DESC"), '\b' || UPPER(v_search_term) || '\b') THEN 75     
-                        WHEN ai.SYNONYMS IS NOT NULL AND REGEXP_LIKE(UPPER(ai.SYNONYMS), '\b' || UPPER(v_search_term) || '\b') THEN 75
-                        
-                        -- Individual word matches (for multi-word searches)
-                        WHEN INSTR(UPPER(ai."DESC"), UPPER(TRIM(REGEXP_SUBSTR(v_search_term, '\S+', 1, 1)))) > 0 THEN 60
-                        WHEN INSTR(UPPER(ai."DESC"), UPPER(TRIM(REGEXP_SUBSTR(v_search_term, '\S+', 1, 2)))) > 0 THEN 50
-                        
-                        -- Partial matches using REGEXP
-                        WHEN REGEXP_LIKE(UPPER(ai."DESC"), UPPER(v_search_term), 'i') THEN 40
-                        WHEN ai.SYNONYMS IS NOT NULL AND REGEXP_LIKE(UPPER(ai.SYNONYMS), UPPER(v_search_term), 'i') THEN 40
-                        
-                        -- Fuzzy matching for common typos/variations
-                        WHEN UTL_MATCH.JARO_WINKLER_SIMILARITY(UPPER(ai."DESC"), UPPER(v_search_term)) > 0.8 THEN 30
+                        -- Word boundary matches (precise matching)
+                        WHEN REGEXP_LIKE(UPPER(ai."DESC"), '\b' || UPPER(v_search_term) || '\b') THEN 70     
+                        WHEN ai.SYNONYMS IS NOT NULL AND REGEXP_LIKE(UPPER(ai.SYNONYMS), '\b' || UPPER(v_search_term) || '\b') THEN 70
                         
                         ELSE 0
                     END AS text_match_score,
@@ -188,20 +177,16 @@ BEGIN
                 
                 WHERE ai."DESC" IS NOT NULL
                 AND LENGTH(TRIM(ai."DESC")) > 0
-                -- Broader filter: Include more potential matches
+                -- Focused filter: Exact matches prioritized
                 AND (
-                    -- Text matching (primary)
+                    -- Primary: Direct text matches in description
                     (UPPER(ai."DESC") LIKE '%' || UPPER(v_search_term) || '%') OR
+                    -- Primary: Direct text matches in synonyms
                     (ai.SYNONYMS IS NOT NULL AND UPPER(ai.SYNONYMS) LIKE '%' || UPPER(v_search_term) || '%') OR
-                    -- Individual word matching for multi-word searches
-                    (INSTR(UPPER(ai."DESC"), UPPER(TRIM(REGEXP_SUBSTR(v_search_term, '\S+', 1, 1)))) > 0) OR
-                    (INSTR(UPPER(ai."DESC"), UPPER(TRIM(REGEXP_SUBSTR(v_search_term, '\S+', 1, 2)))) > 0) OR
-                    -- Vector similarity (if available)
-                    (ai.vector_desc IS NOT NULL AND (1 - vector_distance(ai.vector_desc, v_query_vector, COSINE)) >= 0.2) OR
-                    -- Customer history (always include)
-                    (ch.item IS NOT NULL) OR
-                    -- Partial word matching
-                    (EXISTS (SELECT 1 FROM dual WHERE REGEXP_LIKE(UPPER(ai."DESC"), UPPER(v_search_term), 'i')))
+                    -- Secondary: Vector similarity for semantic matches (if vector exists)
+                    (ai.vector_desc IS NOT NULL AND (1 - vector_distance(ai.vector_desc, v_query_vector, COSINE)) >= 0.4) OR
+                    -- Tertiary: Customer purchase history items
+                    (ch.item IS NOT NULL)
                 )
             )
             SELECT
@@ -240,8 +225,8 @@ BEGIN
                 END AS rec_type
                 
             FROM scored_items
-            WHERE (text_match_score + history_score + similarity_score) > 5   -- Lowered threshold for more results
-            AND (text_match_score > 0 OR history_score > 0 OR similarity_score > 20)  -- At least some relevance
+            WHERE (text_match_score + history_score + similarity_score) > 15  -- Focused threshold for quality results
+            AND (text_match_score > 0 OR history_score > 10 OR similarity_score > 40)  -- Ensure real relevance
             ORDER BY
                 total_score DESC,        -- Primary: highest total score
                 history_score DESC,      -- Secondary: customer history
