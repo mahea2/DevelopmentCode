@@ -70,12 +70,12 @@ BEGIN
                     SUM(d.qtyshipped) as total_qty_purchased,
                     MAX(h.invdate) as last_purchase_date,
                     SUM(d.unitcost) as total_amount_spent,
-                    -- Recency scoring based on last purchase date
+                    -- Recency scoring based on last purchase date (converting numeric date)
                     CASE 
-                        WHEN MAX(h.invdate) >= SYSDATE - 30 THEN 50   -- Very recent (last 30 days)
-                        WHEN MAX(h.invdate) >= SYSDATE - 90 THEN 40   -- Recent (last 3 months)
-                        WHEN MAX(h.invdate) >= SYSDATE - 180 THEN 30  -- Medium recent (last 6 months)
-                        WHEN MAX(h.invdate) >= SYSDATE - 365 THEN 20  -- Within last year
+                        WHEN TO_DATE(TO_CHAR(MAX(h.invdate)), 'YYYYMMDD') >= SYSDATE - 30 THEN 50   -- Very recent (last 30 days)
+                        WHEN TO_DATE(TO_CHAR(MAX(h.invdate)), 'YYYYMMDD') >= SYSDATE - 90 THEN 40   -- Recent (last 3 months)
+                        WHEN TO_DATE(TO_CHAR(MAX(h.invdate)), 'YYYYMMDD') >= SYSDATE - 180 THEN 30  -- Medium recent (last 6 months)
+                        WHEN TO_DATE(TO_CHAR(MAX(h.invdate)), 'YYYYMMDD') >= SYSDATE - 365 THEN 20  -- Within last year
                         ELSE 10                                        -- Older purchases
                     END as recency_score,
                     -- Frequency scoring based on number of orders
@@ -88,7 +88,7 @@ BEGIN
                 FROM SFLDAT.OEINVH h
                 INNER JOIN SFLDAT.OEINVD d ON h.invuniq = d.invuniq
                 WHERE h.customer = v_customer_id
-                AND h.invdate >= SYSDATE - v_days_lookback
+                AND TO_DATE(TO_CHAR(h.invdate), 'YYYYMMDD') >= SYSDATE - v_days_lookback
                 AND d.qtyshipped > 0
                 AND d.unitcost > 0
                 GROUP BY d.item
@@ -138,7 +138,7 @@ BEGIN
                     COALESCE(stock.total_qty, 0) AS stock_qty,
                     COALESCE(brand.value, 'Unknown') AS brand_name,
                     COALESCE(ch.order_count, 0) AS customer_orders,
-                    COALESCE(ch.last_purchase_date, TO_DATE('1900-01-01', 'YYYY-MM-DD')) AS last_purchase,
+                    COALESCE(TO_DATE(TO_CHAR(ch.last_purchase_date), 'YYYYMMDD'), TO_DATE('1900-01-01', 'YYYY-MM-DD')) AS last_purchase,
                     COALESCE(ch.total_amount_spent, 0) AS customer_spent
                     
                 FROM AI_ICITEM ai
