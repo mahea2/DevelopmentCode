@@ -238,13 +238,13 @@ BEGIN
                 SYNONYMS,
                 brand_name,
                 
-                -- Weighted total score calculation with business priorities
+                -- Clear priority-based total score calculation
                 (
-                    text_match_score * 1.5 +     -- Highest priority: exact text matching
-                    history_score * 1.8 +        -- Highest priority: customer purchase history  
-                    brand_score * 1.2 +          -- High priority: BALAR brand preference
-                    stock_score * 1.0 +          -- Medium priority: stock availability
-                    similarity_score * 0.8       -- Lower priority: vector similarity
+                    text_match_score * 1000 +     -- TOP PRIORITY: exact text matching (0-100,000 range)
+                    history_score * 100 +         -- 2nd PRIORITY: customer history (0-8,000 range)  
+                    brand_score * 10 +            -- 3rd PRIORITY: BALAR brand (0-1,000 range)
+                    stock_score * 1 +             -- 4th PRIORITY: stock availability (0-50 range)
+                    similarity_score * 0.1        -- 5th PRIORITY: vector similarity (0-10 range)
                 ) AS total_score,
                 
                 -- Individual score components for transparency
@@ -268,14 +268,15 @@ BEGIN
                 END AS rec_type
                 
             FROM scored_items
-            WHERE (text_match_score + history_score + similarity_score) > 15  -- Focused threshold for quality results
-            AND (text_match_score > 0 OR history_score > 10 OR similarity_score > 40)  -- Ensure real relevance
+            WHERE text_match_score > 0  -- MUST have text relevance first
+            OR (history_score > 20 AND ch.item IS NOT NULL)  -- OR strong customer history
+            OR (brand_score = 100 AND text_match_score > 30)  -- OR BALAR brand with some text relevance
             ORDER BY
-                total_score DESC,        -- Primary: highest total score
-                history_score DESC,      -- Secondary: customer history
-                brand_score DESC,        -- Tertiary: BALAR brand preference
-                text_match_score DESC,   -- Quaternary: text matching
-                stock_qty DESC,          -- Quinary: stock availability
+                text_match_score DESC,   -- 1st: Exact text matches come first
+                history_score DESC,      -- 2nd: Then customer purchase history
+                brand_score DESC,        -- 3rd: Then BALAR brand items
+                stock_qty DESC,          -- 4th: Then items with more stock
+                similarity_score DESC,   -- 5th: Then vector similarity
                 itemno ASC              -- Final: consistent ordering
             OFFSET v_offset ROWS
             FETCH NEXT v_top_n ROWS ONLY
